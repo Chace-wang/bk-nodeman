@@ -1,6 +1,7 @@
 <template>
   <section>
     <bk-table
+      v-test="'policyTable'"
       :class="`head-customize-table ${ fontSize }`"
       :data="data"
       :max-height="windowHeight - 180"
@@ -14,7 +15,7 @@
       @page-limit-change="handleLimitChange"
       @row-click="handleRowClick"
       @expand-change="handleExpandChange">
-      <bk-table-column width="36" prop="expand" :resizable="false">
+      <bk-table-column width="36" prop="expand" :resizable="false" fixed>
         <template #default="{ row }">
           <div
             v-if="row.hasGrayRule"
@@ -23,7 +24,7 @@
           </div>
         </template>
       </bk-table-column>
-      <bk-table-column width="12" :resizable="false" class-name="abnormal-column">
+      <bk-table-column width="12" :resizable="false" class-name="abnormal-column" fixed>
         <template #default="{ row }">
           <bk-popover
             v-if="row.abnormal_host_count && row.enable"
@@ -43,7 +44,8 @@
           </bk-popover>
         </template>
       </bk-table-column>
-      <bk-table-column :label="$t('部署策略')" min-width="200" class-name="name-column" label-class-name="name-column">
+      <bk-table-column
+        :label="$t('部署策略')" min-width="200" class-name="name-column" label-class-name="name-column" fixed>
         <template #default="{ row }">
           <bk-input
             v-if="editId === row.id"
@@ -86,7 +88,7 @@
       <bk-table-column v-if="filter['host_num'].mockChecked" :label="$t('关联主机数')" align="right" width="90">
         <template #default="{ row }">
           <div class="num-link">
-            <span class="num" @click.stop="handleViewAssociatedHost(row)">
+            <span class="num" v-test="'filterNode'" @click.stop="handleViewAssociatedHost(row)">
               {{ row.associated_host_num || 0 }}
             </span>
           </div>
@@ -152,10 +154,11 @@
             <!-- 灰度策略 -->
             <template v-if="row.isGrayRule">
               <!-- 主策略停用后，灰度策略的【发布】和【编辑】都禁用掉，只保留【删除】 -->
-              <bk-button text :disabled="!row.enable" @click.stop="handleRuleOperate(row, 'editGray')">
+              <bk-button
+                v-test="'editGray'" text :disabled="!row.enable" @click.stop="handleRuleOperate(row, 'editGray')">
                 {{ $t('编辑') }}
               </bk-button>
-              <bk-button text class="ml10"
+              <bk-button v-test="'releaseGray'" text class="ml10"
                          :disabled="!row.enable"
                          v-bk-tooltips.top="{
                            width: 200,
@@ -164,7 +167,7 @@
                          @click.stop="handleRuleOperate(row, 'releaseGray')">
                 {{ $t('发布') }}
               </bk-button>
-              <bk-button text class="ml10"
+              <bk-button v-test="'deleteGray'" text class="ml10"
                          v-bk-tooltips.bottom-end="{
                            width: 200,
                            content: $t('灰度删除btn提示', [row.plugin_name])
@@ -175,9 +178,9 @@
             </template>
             <!-- 主策略 - 启用 -->
             <template v-else-if="row.enable">
-              <bk-button text @click.stop="handleRuleOperate(row, 'edit')">{{ $t('编辑') }}</bk-button>
+              <bk-button v-test="'edit'" text @click.stop="handleRuleOperate(row, 'edit')">{{ $t('编辑') }}</bk-button>
               <bk-popover placement="top">
-                <bk-button text class="ml10" @click.stop="handleRuleOperate(row, 'createGray')">
+                <bk-button v-test="'createGray'" text class="ml10" @click.stop="handleRuleOperate(row, 'createGray')">
                   {{ $t('灰度') }}
                 </bk-button>
                 <i18n path="多行国际化" slot="content">
@@ -185,13 +188,18 @@
                   <p>{{ $t('主策略版本保持不变Tip') }}</p>
                 </i18n>
               </bk-popover>
-              <bk-button text class="ml10" @click.stop="handleRuleOperate(row, 'stop')">{{ $t('停用') }}</bk-button>
+              <bk-button v-test="'stop'" text class="ml10" @click.stop="handleRuleOperate(row, 'stop')">
+                {{ $t('停用') }}
+              </bk-button>
             </template>
             <!-- 主策略 - 停用: 可存在灰度策略, 无新增灰度入口, 不可发布、编辑灰度, 可删除灰度 -->
             <template v-else>
-              <bk-button text @click.stop="handleRuleOperate(row, 'start')">{{ $t('启用') }}</bk-button>
+              <bk-button v-test="'start'" text @click.stop="handleRuleOperate(row, 'start')">
+                {{ $t('启用') }}
+              </bk-button>
               <bk-button v-if="!row.associated_host_num" text class="ml10" @click.stop.prevent>
                 <bk-popconfirm
+                  v-test="'delete'"
                   trigger="click"
                   width="280"
                   :title="$t('是否删除此策略')"
@@ -200,7 +208,8 @@
                   {{ $t('删除') }}
                 </bk-popconfirm>
               </bk-button>
-              <bk-button v-else text class="ml10" @click.stop="handleRuleOperate(row, 'stop_and_delete')">
+              <bk-button v-test="'stopAndDelete'"
+                         v-else text class="ml10" @click.stop="handleRuleOperate(row, 'stop_and_delete')">
                 {{ $t('卸载并删除') }}
               </bk-button>
             </template>

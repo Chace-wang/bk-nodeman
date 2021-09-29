@@ -12,8 +12,10 @@ specific language governing permissions and limitations under the License.
 from __future__ import unicode_literals
 
 import os
+import platform
 import re
 from enum import Enum
+from typing import List
 
 from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
@@ -29,12 +31,18 @@ from apps.utils.basic import (
 # 此值为历史遗留，后续蓝鲸不使用此字段后可废弃
 DEFAULT_SUPPLIER_ID = 0
 
-LINUX_SEP = "/"
-WINDOWS_SEP = "\\"
-
 ########################################################################################################
 # 任务超时控制
 ########################################################################################################
+
+
+class TimeUnit:
+    SECOND = 1
+    MINUTE = SECOND * 60
+    HOUR = MINUTE * 60
+    DAY = HOUR * 24
+
+
 TASK_TIMEOUT = 0  # 脚本超时控制在180s=3min
 TASK_MAX_TIMEOUT = 3600  # 脚本超时控制在180s=3min
 JOB_MAX_RETRY = 60  # 默认轮询作业最大次数 100次=3min
@@ -55,6 +63,35 @@ DEFAULT_AP_ID = int(os.environ.get("DEFAULT_AP_ID", -1))
 GSE_NAMESPACE = "nodeman"
 
 CC_HOST_FIELDS = ["bk_host_id", "bk_cloud_id", "bk_host_innerip", "bk_host_outerip", "bk_os_type", "bk_os_name"]
+
+
+########################################################################################################
+# 字符串常量
+########################################################################################################
+
+LINUX_SEP = "/"
+
+WINDOWS_SEP = "\\"
+
+# 临时文件存放位置
+TMP_DIR = ("/tmp", "c:/")[platform.system() == "Windows"]
+
+# 临时文件名格式模板
+TMP_FILE_NAME_FORMAT = "nm_tf_{name}"
+
+
+class PluginChildDir(Enum):
+    EXTERNAL = "external_plugins"
+    OFFICIAL = "plugins"
+
+    @classmethod
+    def get_optional_items(cls) -> List[str]:
+        return [cls.EXTERNAL.value, cls.OFFICIAL.value]
+
+
+PACKAGE_PATH_RE = re.compile(
+    "(?P<is_external>external_)?plugins_(?P<os>(linux|windows|aix))_(?P<cpu_arch>(x86_64|x86|powerpc|aarch64))"
+)
 
 ########################################################################################################
 # CHOICES
@@ -441,10 +478,6 @@ JOB_IP_STATUS_TUPLE = ("success", "pending", "failed", "not_job")
 JOB_IP_STATUS_CHOICES = tuple_choices(JOB_IP_STATUS_TUPLE)
 JobIpStatusType = choices_to_namedtuple(JOB_IP_STATUS_CHOICES)
 
-PACKAGE_PATH_RE = re.compile(
-    "(?P<is_external>external_)?plugins_(?P<os>(linux|windows|aix))_(?P<cpu_arch>(x86_64|x86|powerpc|aarch64))"
-)
-
 SYNC_CMDB_HOST_BIZ_BLACKLIST = "SYNC_CMDB_HOST_BIZ_BLACKLIST"
 
 # 周期任务相关
@@ -502,10 +535,11 @@ GSE_PORT_DEFAULT_VALUE = {
     "proc_port": 50000,
     "bt_port": 10020,
     "tracker_port": 10030,
+    "data_prometheus_port": 59402,
 }
 
 # 社区版GSE SERVER的端口有所不同，TODO 考虑把这些端口放到环境变量中
-if settings.BKAPP_RUN_ENV == BkappRunEnvType.CE:
+if settings.BKAPP_RUN_ENV == BkappRunEnvType.CE.value:
     GSE_PORT_DEFAULT_VALUE.update(
         {
             "io_port": 48533,
@@ -547,7 +581,6 @@ FIND_HOST_BY_TEMPLATE_FIELD = (
     "bk_supplier_account",
     "bk_state",
     "bk_os_version",
-
     "bk_state",
 )
 
@@ -591,6 +624,7 @@ class BkAgentStatus(object):
     Gse agent状态码：
     0为不在线，1为在线
     """
+
     ALIVE = 1
 
 
@@ -681,13 +715,6 @@ class PolicyRollBackType:
     TRANSFER_TO_ANOTHER = "TRANSFER_TO_ANOTHER"
 
     ROLLBACK_TYPE__ALIAS_MAP = {SUPPRESSED: "已被其他策略管控", LOSE_CONTROL: "脱离策略管控", TRANSFER_TO_ANOTHER: "转移到优先级最高的策略"}
-
-
-class TimeUnit:
-    SECOND = 1
-    MINUTE = SECOND * 60
-    HOUR = MINUTE * 60
-    DAY = HOUR * 24
 
 
 FILES_TO_PUSH_TO_PROXY = [

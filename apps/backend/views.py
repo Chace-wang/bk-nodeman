@@ -18,11 +18,76 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.backend.utils.data_renderer import nested_render_data
+from apps.backend.utils.encrypted import GseEncrypted
 from apps.node_man import constants, models
 from apps.node_man.models import Host, JobSubscriptionInstanceMap, aes_cipher
 from pipeline.service import task_service
 
 logger = logging.getLogger("app")
+
+DATA_TMPLATE = """
+{
+    "level":"error",
+    "log": "{{ log_path }}",
+    "password_keyfile": "{{ setup_path }}/proxy/cert/cert_encrypt.key",
+    "cert":"{{ setup_path }}/proxy/cert",
+    "runtimedata":"{{ setup_path }}/proxy/public/gse",
+    "runmode":1,
+    "datasvrip":"{{ inner_ip }}",
+    "dbgipc":"{{ setup_path }}/public/gse/ipc.dbg.data",
+    "dataflow":"{{ setup_path }}/proxy/etc/dataflow.conf",
+    "prometheus_http_svr_ip":"0.0.0.0",
+    "prometheus_datasvr_port": {{ data_prometheus_port }},
+    "enableops": false,
+    "zkhost": "",
+    "dftregid": "{{ region_id }}",
+    "dftcityid": "{{ city_id }}"
+} """
+
+DATALOFW_TMPLATE = """
+{
+    "receiver":[
+      {
+        "name":"r_agent",
+        "protocol":1,
+        "bind": "{{ inner_ip }}",
+        "port": {{ data_port }},
+        "cert":"{{ setup_path}}/proxy/cert",
+        "protostack":2
+      }
+    ],
+    "exporter":[
+      {
+        "name":"e_transfer_to_ds",
+        "type":9,
+        "cert":"{{ setup_path }}/proxy/cert",
+        "proxyprotocol":"tcp",
+        "connectionnum":4,
+        "proxyversion":"v1",
+        "heartbeat":true,
+        "addresses":[
+            {% for gse_outer_ip in taskserver_outer_ips%}
+                {
+                    "ip": "{{ gse_outer_ip }}",
+                    "port": {{ data_port }}
+                }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ]
+      }
+    ],
+    "filters":[
+    ],
+    "channel":[
+        {
+            "name":"c_transfer_ds",
+            "decode":5,
+            "receiver":"r_agent",
+            "exporter":[
+                "e_transfer_to_ds"
+            ]
+        }
+    ]
+} """
 
 AGENT_TEMPLATE = """
 {
@@ -420,8 +485,7 @@ def generate_gse_config(bk_cloud_id, filename, node_type, inner_ip):
         alarmcfgpath = path_sep.join([setup_path, "plugins", "etc"])
         plugincfg = path_sep.join([setup_path, "agent", "etc", "plugin_info.json"])
         pluginbin = path_sep.join([setup_path, "agent", "lib"])
-        pluginipc = path_sep.join([setup_path, "agent", "data", "ipc.plugin.manage"])
-        # plugin_info.json 配置
+        pluginipc = path_sep.join([setup_path, "agent", "data", "ipc.plugin.manage"])  # plugin_info.json 配置
         plugin_path = path_sep.join([setup_path, "agent", "lib", "libbkbscp-gseplugin.so"])
         if host.os_type.lower() == "windows":
             setup_path = json.dumps(setup_path)
@@ -447,6 +511,11 @@ def generate_gse_config(bk_cloud_id, filename, node_type, inner_ip):
             pluginbin = f'"{pluginbin}"'
             pluginipc = f'"{pluginipc}"'
 
+        if settings.GSE_USE_ENCRYPTION:
+            zk_auth = GseEncrypted.encrypted(f"{host.ap.zk_account}:{host.ap.zk_password}")
+        else:
+            zk_auth = f"{host.ap.zk_account}:{host.ap.zk_password}"
+
         context = {
             "setup_path": setup_path,
             "log_path": log_path,
@@ -469,9 +538,7 @@ def generate_gse_config(bk_cloud_id, filename, node_type, inner_ip):
             "pluginbin": pluginbin,
             "pluginipc": pluginipc,
             "zkhost": ",".join(f'{zk_host["zk_ip"]}:{zk_host["zk_port"]}' for zk_host in host.ap.zk_hosts),
-            "zkauth": f"{host.ap.zk_account}:{host.ap.zk_password}"
-            if host.ap.zk_account and host.ap.zk_password
-            else "",
+            "zkauth": zk_auth if host.ap.zk_account and host.ap.zk_password else "",
             "proxy_servers": [proxy.inner_ip for proxy in host.proxies],
             "peer_exchange_switch_for_agent": host.extra_data.get("peer_exchange_switch_for_agent", 1),
             "bt_speed_limit": host.extra_data.get("bt_speed_limit"),
@@ -501,6 +568,8 @@ def generate_gse_config(bk_cloud_id, filename, node_type, inner_ip):
             "agent.conf": PROXY_TEMPLATE,
             "transit.conf": TRANSIT_TEMPLATE,
             "plugin_info.json": PLUGIN_INFO_TEMPLATE,
+            "dataflow.conf": DATALOFW_TMPLATE,
+            "data.conf": DATA_TMPLATE,
         }[filename]
 
         context = {
@@ -524,6 +593,7 @@ def generate_gse_config(bk_cloud_id, filename, node_type, inner_ip):
             "io_port": port_config.get("io_port"),
             "file_svr_port": port_config.get("file_svr_port"),
             "data_port": port_config.get("data_port"),
+            "data_prometheus_port": port_config.get("data_prometheus_port"),
             "bt_port_start": port_config.get("bt_port_start"),
             "bt_port_end": port_config.get("bt_port_end"),
             "btsvr_thrift_port": port_config.get("btsvr_thrift_port"),

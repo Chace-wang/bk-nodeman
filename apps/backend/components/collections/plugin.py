@@ -43,7 +43,7 @@ from apps.exceptions import AppBaseException
 from apps.node_man import constants, exceptions, models
 from apps.node_man.handlers.cmdb import CmdbHandler
 from apps.utils.batch_request import request_multi_thread
-from apps.utils.path_handler import PathHandler
+from apps.utils.files import PathHandler
 from common.api import GseApi, JobApi
 from pipeline.component_framework.component import Component
 from pipeline.core.flow import Service, StaticIntervalGenerator
@@ -377,7 +377,9 @@ class InitProcessStatusService(PluginBaseService):
         pid_filename = f"{plugin_name}.pid"
         if package.plugin_desc.category == constants.CategoryType.external:
             # 如果为 external 第三方插件，需要补上插件组目录
-            setup_path = path_handler.join(ap_config["setup_path"], "external_plugins", group_id, package.project)
+            setup_path = path_handler.join(
+                ap_config["setup_path"], constants.PluginChildDir.EXTERNAL.value, group_id, package.project
+            )
 
             if subscription.category == subscription.CategoryType.DEBUG:
                 # debug模式下特殊处理这些路径
@@ -389,7 +391,7 @@ class InitProcessStatusService(PluginBaseService):
                 log_path = path_handler.join(ap_config["log_path"], group_id)
                 data_path = path_handler.join(ap_config["data_path"], group_id)
         else:
-            setup_path = path_handler.join(ap_config["setup_path"], "plugins", "bin")
+            setup_path = path_handler.join(ap_config["setup_path"], constants.PluginChildDir.OFFICIAL.value, "bin")
             pid_path = path_handler.join(ap_config["run_path"], pid_filename)
             log_path = ap_config["log_path"]
             data_path = ap_config["data_path"]
@@ -486,7 +488,7 @@ class TransferPackageService(JobV3BaseService, PluginBaseService):
         # 如 linux-arm、linux-x86、windows-x86 的插件，需分为三组
         # 把多个IP合并为一个任务，可以利用GSE文件管道的BT能力，提高传输效率
         jobs: Dict[str, Dict[str, Union[list, str]]] = defaultdict(lambda: defaultdict(list))
-        nginx_path = settings.NGINX_DOWNLOAD_PATH
+        nginx_path = settings.DOWNLOAD_PATH
         for process_status in process_statuses:
             bk_host_id = process_status.bk_host_id
             subscription_instance = group_id_instance_map.get(process_status.group_id)
@@ -513,14 +515,7 @@ class TransferPackageService(JobV3BaseService, PluginBaseService):
                     "subscription_id": common_data.subscription.id,
                     "job_params": {
                         "file_target_path": job["temp_path"],
-                        "file_source_list": [
-                            {
-                                "file_list": file_list,
-                                "server": {
-                                    "ip_list": [{"bk_cloud_id": settings.DEFAULT_CLOUD_ID, "ip": settings.BKAPP_NFS_IP}]
-                                },
-                            }
-                        ],
+                        "file_source_list": [{"file_list": file_list}],
                         "os_type": job["os_type"],
                         "target_server": {"ip_list": job["ip_list"]},
                     },

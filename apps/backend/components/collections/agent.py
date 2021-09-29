@@ -44,6 +44,7 @@ from apps.backend.views import generate_gse_config
 from apps.component.esbclient import client_v2
 from apps.exceptions import AuthOverdueException, ComponentCallError
 from apps.node_man import constants
+from apps.node_man.exceptions import HostNotExists
 from apps.node_man.handlers.tjj import TjjHandler
 from apps.node_man.models import (
     AccessPoint,
@@ -253,6 +254,15 @@ class RegisterHostService(AgentBaseService):
 
     def _execute(self, data, parent_data):
         host_info = data.get_one_of_inputs("host_info")
+        try:
+            host = Host.get_by_host_info(host_info)
+        except HostNotExists:
+            self.logger.info(_("主机待注册"))
+        else:
+            # 主机已存在，Agent 转安装 Proxy的场景，无需再注册
+            if host.node_type != constants.NodeType.PROXY and host_info["host_node_type"] == constants.NodeType.PROXY:
+                data.outputs.is_register = True
+                return True
 
         # 是否为手动安装
         is_manual = host_info.get("is_manual", False)
@@ -297,11 +307,11 @@ class RegisterHostService(AgentBaseService):
         return True
 
     def schedule(self, data, parent_data, callback_data=None):
-        polling_time = data.get_one_of_outputs("polling_time")
-        is_register = data.get_one_of_outputs("is_register")
+        polling_time = data.get_one_of_outputs("polling_time") or 0
+        is_register = data.get_one_of_outputs("is_register") or False
         host_info = data.get_one_of_inputs("host_info")
         bk_host_id = data.get_one_of_outputs("bk_host_id")
-        query_cc_count = data.get_one_of_outputs("query_cc_count")
+        query_cc_count = data.get_one_of_outputs("query_cc_count") or 0
         inner_ip = host_info["bk_host_innerip"]
         outer_ip = host_info.get("bk_host_outerip", "")
         login_ip = host_info.get("login_ip", "")
@@ -833,9 +843,7 @@ class InstallService(AgentBaseService, JobFastExecuteScriptService):
             job_status_kwargs = log.get("job_status_kwargs")
             if job_status_kwargs:
                 # 判断任务是否在执行中或成功
-                job_instance_log = client_v2.job.get_job_instance_log(
-                    job_status_kwargs, bk_username=data.get_one_of_inputs("bk_username")
-                )
+                job_instance_log = client_v2.job.get_job_instance_log(job_status_kwargs)
 
                 job_status = job_instance_log[0].get("status", "")
                 if job_status == JobDataStatus.PENDING:
@@ -922,28 +930,20 @@ class PushUpgradePackageService(JobFastPushFileService):
         self.logger.info(_("开始下发升级包"))
         host_info = data.get_one_of_inputs("host_info")
         host = Host.get_by_host_info(host_info)
-        nginx_path = host.ap.nginx_path or settings.NGINX_DOWNLOAD_PATH
+        nginx_path = host.ap.nginx_path or settings.DOWNLOAD_PATH
         data.inputs.file_target_path = host.agent_config["temp_path"]
 
         os_type = host.os_type.lower()
-        bk_os_bit = host_info.get("bk_os_bit")
 
         # 根据节点类型、位数、系统等组装包名
-        arch = "x86" if bk_os_bit == "32-bit" else "x86_64"
         gse_type = "proxy" if host.node_type == constants.NodeType.PROXY else "client"
-        package_name = f"gse_{gse_type}-{os_type}-{arch}_upgrade.tgz"
+        package_name = f"gse_{gse_type}-{os_type}-{host.cpu_arch}_upgrade.tgz"
         files = [package_name]
 
         # windows机器需要添加解压文件
-        if os_type == "windows":
+        if os_type == constants.OsType.WINDOWS:
             files.extend(["7z.dll", "7z.exe"])
-        file_source = [
-            {
-                "files": [f"{nginx_path}/{file}" for file in files],
-                "account": "root",
-                "ip_list": [{"ip": settings.BKAPP_LAN_IP, "bk_cloud_id": 0}],
-            }
-        ]
+        file_source = [{"files": [f"{nginx_path}/{file}" for file in files]}]
 
         data.inputs.file_source = file_source
 
@@ -993,10 +993,22 @@ class RunUpgradeCommandService(JobFastExecuteScriptService):
             with open(path, encoding="utf-8") as fh:
                 script = fh.read()
             if host.node_type == constants.NodeType.PROXY:
-                reload_cmd = (
-                    "./gse_agent --reload && ./gse_transit --reload && ./gse_btsvr --reload || ./gsectl restart all"
-                )
                 node_type = "proxy"
+                reload_cmd = """
+result=0
+count=0
+for proc in gse_agent gse_transit gse_btsvr gse_data; do
+     [ -f {setup_path}/{node_type}/bin/$proc ] && cd {setup_path}/{node_type}/bin && ./$proc --reload && \
+     count=$((count + 1))
+     sleep 1
+     result=$((result + $?))
+done
+if [[ $result -gt 0 || $count -lt 3 ]]; then
+   cd {setup_path}/{node_type}/bin && ./gsectl restart all
+fi
+                """.format(
+                    setup_path=setup_path, node_type=node_type
+                )
             else:
                 reload_cmd = "./gse_agent --reload || ./gsectl restart all"
                 node_type = "agent"
@@ -1276,7 +1288,9 @@ class OperatePluginService(AgentBaseService, GseBaseService):
         else:
             path_handler = posixpath
 
-        setup_path = path_handler.join(package.proc_control.install_path, "plugins", "bin")
+        setup_path = path_handler.join(
+            package.proc_control.install_path, constants.PluginChildDir.OFFICIAL.value, "bin"
+        )
         pid_path = package.proc_control.pid_path
 
         result = gse_client.register_process(hosts, control, setup_path, pid_path, plugin_name, plugin_name)

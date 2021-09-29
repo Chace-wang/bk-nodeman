@@ -16,6 +16,7 @@
               slot="dropdown-trigger"
               theme="primary"
               :disabled="disabled"
+              v-test="'install'"
               @click="triggerHandler({ type: 'reinstall' })">
               <span class="icon-down-wrapper">
                 <span>{{ $t('安装Agent') }}</span>
@@ -32,15 +33,24 @@
                 ext-cls="setup-btn"
                 slot="dropdown-trigger"
                 theme="primary"
-                :disabled="disabled">
+                :disabled="disabled"
+                v-test="'install'">
                 <span class="icon-down-wrapper">
                   <span>{{ $t('安装Agent') }}</span>
                   <i :class="['bk-icon icon-angle-down setup-btn-icon', { 'icon-flip': isSetupDropdownShow }]"></i>
                 </span>
               </bk-button>
-              <ul class="bk-dropdown-list" slot="dropdown-content">
-                <li><a @click.prevent="triggerHandler({ type: 'setup' })">{{ $t('普通安装') }}</a></li>
-                <li><a @click.prevent="triggerHandler({ type: 'import' })">{{ $t('Excel导入安装') }}</a></li>
+              <ul class="bk-dropdown-list" slot="dropdown-content" v-test="'installUl'">
+                <li>
+                  <a @click.prevent="triggerHandler({ type: 'setup' })" v-test.common="'moreItem.setup'">
+                    {{ $t('普通安装') }}
+                  </a>
+                </li>
+                <li>
+                  <a @click.prevent="triggerHandler({ type: 'import' })" v-test.common="'moreItem.import'">
+                    {{ $t('Excel导入安装') }}
+                  </a>
+                </li>
               </ul>
             </bk-dropdown-menu>
           </template>
@@ -58,7 +68,8 @@
             class="dropdown-btn"
             slot="dropdown-trigger"
             :loading="loadingCopyBtn"
-            :disabled="table.data.length === 0">
+            :disabled="table.data.length === 0"
+            v-test="'copy'">
             <span class="icon-down-wrapper">
               <span>{{ $t('复制') }}</span>
               <i :class="['bk-icon icon-angle-down', { 'icon-flip': isCopyDropdownShow }]"></i>
@@ -67,6 +78,7 @@
           <ul class="bk-dropdown-list" slot="dropdown-content">
             <li>
               <a :class="{ 'item-disabled': selectionCount === 0 }"
+                 v-test.common="'moreItem.checkedIp'"
                  @click.prevent.stop="triggerHandler({
                    type: 'checkedIp',
                    disabled: selectionCount === 0
@@ -74,7 +86,11 @@
                 {{ $t('勾选IP') }}
               </a>
             </li>
-            <li><a @click.prevent="triggerHandler({ type: 'allIp' })">{{ $t('所有IP') }}</a></li>
+            <li>
+              <a @click.prevent="triggerHandler({ type: 'allIp' })" v-test.common="'moreItem.allIp'">
+                {{ $t('所有IP') }}
+              </a>
+            </li>
           </ul>
         </bk-dropdown-menu>
         <!--批量操作-->
@@ -88,7 +104,8 @@
           @hide="handleDropdownHide('isbatchDropdownShow')">
           <bk-button
             slot="dropdown-trigger"
-            :disabled="!isSingleHosts || !(indeterminate || isAllChecked)">
+            :disabled="!isSingleHosts || !(indeterminate || isAllChecked)"
+            v-test="'operate'">
             <bk-popover
               placement="bottom"
               :delay="400"
@@ -103,7 +120,10 @@
           <ul class="bk-dropdown-list" slot="dropdown-content">
             <template v-for="item in operate">
               <li v-if="!item.single" :key="item.id" :class="{ 'disabled': getBatchMenuStaus(item) }">
-                <a @click.prevent="!getBatchMenuStaus(item) && triggerHandler({ type: item.id })">{{ item.name }}</a>
+                <a @click.prevent="!getBatchMenuStaus(item) && triggerHandler({ type: item.id })"
+                   v-test.common="`moreItem.${item.id}`">
+                  {{ item.name }}
+                </a>
               </li>
             </template>
           </ul>
@@ -127,6 +147,7 @@
             :placeholder="$t('业务拓扑')"
             :disabled="!bkBizList.length || search.biz.length !== 1"
             :list="topoBizFilterList"
+            v-test="'bizTopo'"
             @change="topoSelectchange"
             @toggle="handleTopoChange">
           </bk-cascade>
@@ -144,6 +165,7 @@
           v-model="searchSelectValue"
           :show-condition="false"
           :placeholder="$t('agent列表搜索')"
+          v-test="'search'"
           @paste.native.capture.prevent="handlePaste"
           @change="handleSearchSelectChange">
         </bk-search-select>
@@ -432,6 +454,7 @@
                     ext-cls="reinstall"
                     :class="{ 'btn-en': language === 'en' }"
                     :disabled="disabled"
+                    v-test="'reload'"
                     @click="handleOperate('reinstall', [row])">
                     {{ row.status === 'not_installed' ? $t('安装') : $t('重装') }}
                   </bk-button>
@@ -443,7 +466,9 @@
                     offset="30, 5"
                     placement="bottom"
                     :disabled="disabled">
-                    <bk-button theme="primary" class="ml10" text :disabled="disabled">{{ $t('更多') }}</bk-button>
+                    <bk-button theme="primary" class="ml10" text :disabled="disabled" v-test.common="'more'">
+                      {{ $t('更多') }}
+                    </bk-button>
                     <template #content>
                       <ul class="dropdown-list">
                         <li
@@ -455,6 +480,7 @@
                             { 'disabled': row.status === 'not_installed' && !(['log', 'remove'].includes(item.id)) }
                           ]"
                           :key="item.id"
+                          v-test.common="`moreItem.${item.id}`"
                           @click="handleOperate(item.id, [row])">
                           {{ item.name }}
                         </li>

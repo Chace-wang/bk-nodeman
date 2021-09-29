@@ -412,28 +412,20 @@ class BulkPushUpgradePackageV2Service(JobBulkPushFileV2Service):
         self.logger.info(_("开始下发升级包"))
         host_info = data.get_one_of_inputs("host_info")
         host = models.Host.get_by_host_info(host_info)
-        nginx_path = host.ap.nginx_path or settings.NGINX_DOWNLOAD_PATH
+        nginx_path = host.ap.nginx_path or settings.DOWNLOAD_PATH
         data.inputs.file_target_path = host.agent_config["temp_path"]
 
         os_type = host.os_type.lower()
-        bk_os_bit = host_info.get("bk_os_bit")
 
         # 根据节点类型、位数、系统等组装包名
-        arch = "x86" if bk_os_bit == "32-bit" else "x86_64"
         gse_type = "proxy" if host.node_type == constants.NodeType.PROXY else "client"
-        package_name = f"gse_{gse_type}-{os_type}-{arch}_upgrade.tgz"
+        package_name = f"gse_{gse_type}-{os_type}-{host.cpu_arch}_upgrade.tgz"
         files = [package_name]
 
         # windows机器需要添加解压文件
-        if os_type == "windows":
+        if os_type == constants.OsType.WINDOWS.lower():
             files.extend(["7z.dll", "7z.exe"])
-        file_source = [
-            {
-                "files": [f"{nginx_path}/{file}" for file in files],
-                "account": "root",
-                "ip_list": [{"ip": settings.BKAPP_LAN_IP, "bk_cloud_id": 0}],
-            }
-        ]
+        file_source = [{"files": [f"{nginx_path}/{file}" for file in files]}]
 
         # 增加ip字段
         host_info["ip"] = host_info["bk_host_innerip"]

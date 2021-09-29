@@ -52,7 +52,7 @@
       @scroll="rootScroll">
       <div ref="scrollPlace" class="virtual-scroll-wrapper" :style="ghostStyle" v-if="virtualScroll"></div>
       <div class="body-content" :class="{ 'virtual-scroll-content': virtualScroll }" ref="content">
-        <table class="form-table">
+        <table class="form-table" v-test.common="'installTable'">
           <colgroup>
             <col v-for="(item, index) in tableHead" :key="index" :width="item.width ? item.width : 'auto'">
           </colgroup>
@@ -116,7 +116,7 @@
                   <!-- 编辑态 -->
                   <InstallInputType
                     v-else
-                    v-model.trim="row[config.prop]"
+                    v-model="row[config.prop]"
                     :class="{ 'fixed-form-el': getCellInputType(row, config) === 'switcher' }"
                     v-bind="{
                       clearable: false,
@@ -166,7 +166,7 @@ import { throttle, isEmpty } from '@/common/util';
 import TableHeader from './table-header.vue';
 import { STORAGE_KEY_COL } from '@/config/storage-key';
 import { Context } from 'vm';
-import { IFileInfo, ISetupHead, ISetupRow, ITabelFliter } from '@/types';
+import { IFileInfo, IKeysMatch, ISetupHead, ISetupRow, ITabelFliter } from '@/types';
 
 interface IFilterRow {
   [key: string]: ITabelFliter
@@ -421,6 +421,10 @@ export default class SetupTable extends Vue {
   @Emit('change')
   private handleCellValueChange(row: ISetupRow, config: ISetupHead) {
     MainStore.updateEdited(true);
+    const prop = config.prop as IKeysMatch<ISetupRow, string>;
+    if (config.type !== 'textarea' && row[prop] && typeof row[prop] === 'string') {
+      row[prop] = row[prop].trim();
+    }
     if (config.handleValueChange) {
       config.handleValueChange.call(this, row);
     }
@@ -761,7 +765,6 @@ export default class SetupTable extends Vue {
       }
       return arr;
     });
-    console.log(data.flat());
     return data.flat();
   }
   /**

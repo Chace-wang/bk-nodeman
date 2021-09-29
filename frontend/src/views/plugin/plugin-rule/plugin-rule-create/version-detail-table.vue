@@ -11,11 +11,12 @@
       <bk-table
         :data="data"
         class="detail-table-left"
+        v-test.policy="'chooseVersionTable'"
         :row-class-name="handleRowClass"
         @row-click="handleRowClick">
         <bk-table-column width="60" align="center">
           <template #default="{ row }">
-            <bk-radio :disabled="row.disabled"
+            <bk-radio v-test.policy="'versionRadio'" :disabled="row.disabled"
                       :value="selectedVersion === row.version"
                       width="90"
                       v-bk-tooltips.left="{
@@ -51,16 +52,8 @@
       </bk-table>
       <div class="detail-table-right">
         <p class="title">{{ $t('版本描述') }}</p>
-        <mavon-editor
-          class="content"
-          :value="markdown"
-          :toolbars-flag="false"
-          :editable="false"
-          :box-shadow="false"
-          :subfield="false"
-          default-open="preview"
-          preview-background="#fff">
-        </mavon-editor>
+        <!-- eslint-disable-next-line vue/no-v-html -->
+        <div class="markdown-body" v-html="markdown"></div>
       </div>
     </div>
     <template slot="footer">

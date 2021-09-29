@@ -1,5 +1,5 @@
 <template>
-  <bk-form ref="form" class="pb10" v-bkloading="{ isLoading }">
+  <bk-form v-test.policy="'chooseForm'" ref="form" class="pb10" v-bkloading="{ isLoading }">
     <bk-form-item
       :label="$t('插件功能')"
       error-display-type="normal"
@@ -37,7 +37,8 @@
       </RuleTable>
     </bk-form-item>
     <bk-form-item>
-      <bk-button class="nodeman-primary-btn" theme="primary" :disabled="btnNextDisabled" @click="handleCreateRule">
+      <bk-button v-test.common="'formCommit'"
+                 class="nodeman-primary-btn" theme="primary" :disabled="btnNextDisabled" @click="handleCreateRule">
         {{ btnText }}
       </bk-button>
       <bk-button class="ml5 nodeman-cancel-btn" @click="routerBack">
@@ -139,7 +140,7 @@ export default class RuleAdd extends Mixins(FormLabelMixin, routerBackMixin) {
   public async getPluginList() {
     this.isLoading = true;
     const res = await PluginStore.pluginPkgList({ simple_all: true });
-    const list = res.list.map(item => ({
+    const list = res.list.filter(item => item.is_ready).map(item => ({
       label: `${item.name}(${item.description})`,
       ...item,
     }));

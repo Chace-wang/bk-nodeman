@@ -1,5 +1,5 @@
 <template>
-  <article class="plugin-node" v-bkloading="{ isLoading: loading }">
+  <article class="plugin-node" v-bkloading="{ isLoading: loading }" v-test="'pluginList'">
     <PluginListOperate
       :search-select-data="filterData"
       :selections="selections"
@@ -40,7 +40,7 @@
       :title="dialogInfo.title"
       @cancel="handleDialogCancel">
       <template #default>
-        <bk-form :label-width="isZh ? 90 : 128">
+        <bk-form v-test="'operateForm'" :label-width="isZh ? 90 : 128">
           <bk-form-item :label="$t('操作范围')">
             <i18n path="已选择插件">
               <b class="num">{{ operateNum }}</b>
@@ -51,6 +51,7 @@
               <bk-button
                 v-for="item in pluginOperateList"
                 :key="item.id"
+                v-test="item.id"
                 ext-cls="btn-item"
                 :class="dialogInfo.operate === item.id ? 'is-selected' : ''"
                 v-bk-tooltips="{
@@ -64,6 +65,7 @@
           </bk-form-item>
           <bk-form-item :label="$t('选择插件')" required>
             <bk-select
+              v-test="'pluginName'"
               ext-cls="plugin-select"
               searchable
               :popover-options="{ 'boundary': 'HTMLElement' }"
@@ -81,6 +83,7 @@
       <template #footer>
         <div class="footer">
           <bk-button
+            v-test.common="'formCommit'"
             theme="primary"
             :disabled="!dialogInfo.plugin"
             @click="handleDialogConfirm">
@@ -172,7 +175,7 @@ export default class PluginList extends Mixins(HeaderFilterMixins) {
     },
   ];
   private mixisPluginName: string[] = []; // 插件的状态和版本筛选条件组合到了一起
-  private pluginStatus: string[] = ['RUNNING', 'TERMINATED', 'UNREGISTER']; // 插件的三个固定状态
+  private pluginStatusMap: { [key: string]: string[] } = {}; // 插件的状态列表
 
   private get selectedAllDisabled() {
     const statusCondition = this.searchSelectValue.find(item => item.id === 'status');
@@ -250,7 +253,7 @@ export default class PluginList extends Mixins(HeaderFilterMixins) {
       };
       list.push(pluginItem);
 
-      this.pluginList = data2.map(item => ({
+      this.pluginList = data2.filter(item => item.is_ready).map(item => ({
         label: `${item.name}(${item.description})`,
         ...item,
       }));
@@ -290,6 +293,7 @@ export default class PluginList extends Mixins(HeaderFilterMixins) {
       data.forEach((item) => {
         if (!statusReg.test(item.id)) {
           const statusItem = data.find(child => child.id === `${item.id}_status`);
+          this.pluginStatusMap[item.id] = statusItem?.children?.map(item => item.id) || [];
           if (statusItem) {
             item.name = item.id;
             item.children?.splice(0, 0, ...(statusItem.children || []));
@@ -331,8 +335,8 @@ export default class PluginList extends Mixins(HeaderFilterMixins) {
       // 从插件里区分状态和版本
       if (this.mixisPluginName.includes(item.id)) {
         const values = item.values || [];
-        const status = values.filter(child => this.pluginStatus.includes(child.id));
-        const version = values.filter(child => !this.pluginStatus.includes(child.id));
+        const status = values.filter(child => this.pluginStatusMap[item.id].includes(child.id));
+        const version = values.filter(child => !this.pluginStatusMap[item.id].includes(child.id));
         if (status.length) {
           conditions.push({
             key: `${item.id}_status`,

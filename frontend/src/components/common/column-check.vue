@@ -15,6 +15,7 @@
               'indeterminate': value === 1 && checkType.active === 'all'
             }"
             :disabled="disabled || permission.disabled"
+            v-test.common="'headCheck'"
             @change="handleCheckChange">
           </bk-checkbox>
         </template>
@@ -29,21 +30,21 @@
         :on-show="handleOnShow"
         :on-hide="handleOnHide"
         :disabled="disabled">
-        <i :class="[
-          'check-icon nodeman-icon',
-          isDropDownShow ? 'nc-arrow-up' : 'nc-arrow-down',
-          { disabled: disabled }
-        ]"></i>
+        <i
+          :class="['check-icon nodeman-icon', `nc-arrow-${ isDropDownShow ? 'up' : 'down'}`, { disabled: disabled }]"
+          v-test.common="'iconMore'">
+        </i>
         <template #content>
-          <ul class="dropdown-list">
+          <ul class="dropdown-list" v-test.common="'headCheckUl'">
             <template v-for="(item, index) in checkType.list">
               <auth-component
-                v-if="item.id === 'current'"
                 tag="li"
                 class="list-item"
-                :authorized="checkAllPermission"
+                style="display: block;"
+                :authorized="checkAllPermission || item.id !== 'current'"
                 :apply-info="[{ action }]"
                 :key="index"
+                v-test.common="`moreItem.${item.id}`"
                 @click="handleCheckAll(item.id)">
                 <template slot-scope="permission">
                   <span :disabled="permission.disabled">
@@ -51,9 +52,6 @@
                   </span>
                 </template>
               </auth-component>
-              <li v-else class="list-item" :key="index" @click="handleCheckAll(item.id)">
-                {{ item.name }}
-              </li>
             </template>
           </ul>
         </template>

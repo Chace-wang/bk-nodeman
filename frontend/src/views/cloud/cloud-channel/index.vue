@@ -1,7 +1,7 @@
 <template>
   <section class="cloud-channel">
     <div class="tr fs0">
-      <bk-button @click="handleEdit">{{ $t('编辑') }}</bk-button>
+      <bk-button v-test="'editChannel'" @click="handleEdit">{{ $t('编辑') }}</bk-button>
       <bk-popconfirm
         style="margin-left: 8px;"
         width="280"
@@ -10,7 +10,7 @@
         :content="$t('通过此通道安装的Agent不受影响')"
         :disabled="deleteLoading"
         @confirm="confirmDeleteChannel">
-        <bk-button class="delete-btn" :loading="deleteLoading">{{ $t('删除通道') }}</bk-button>
+        <bk-button class="delete-btn" v-test="'deleteChannel'" :loading="deleteLoading">{{ $t('删除通道') }}</bk-button>
       </bk-popconfirm>
     </div>
     <ChannelTable class="mt20" :channel="channel"></ChannelTable>
@@ -21,16 +21,9 @@
     </Tips>
 
     <section class="deploy-guide">
-      <mavon-editor
-        class="markdown-content"
-        :value="channelMdText"
-        :toolbars-flag="false"
-        :editable="false"
-        :box-shadow="false"
-        :subfield="false"
-        default-open="preview"
-        preview-background="#fff">
-      </mavon-editor>
+      <div class="markdown-content">
+        <ChannelMdFile class="markdown-body"></ChannelMdFile>
+      </div>
     </section>
   </section>
 </template>
@@ -39,19 +32,19 @@ import { Component, Emit, Prop, Vue } from 'vue-property-decorator';
 import ChannelTable from './channel-table.vue';
 import Tips from '@/components/common/tips.vue';
 import { CloudStore } from '@/store';
-import channelMdFile from './install_channel.md';
+import ChannelMdFile from './install_channel.md';
 
 @Component({
   components: {
     ChannelTable,
     Tips,
+    ChannelMdFile,
   },
 })
 export default class CloudChannel extends Vue {
   @Prop({ default: () => ({}), type: Object }) private readonly channel!: Dictionary;
 
   private deleteLoading = false;
-  private channelMdText = channelMdFile;
 
   private get showTips() {
     return !this.channel || this.channel.status !== 'running';
