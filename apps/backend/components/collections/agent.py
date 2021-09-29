@@ -67,9 +67,6 @@ class AgentBaseService(BaseService, metaclass=abc.ABCMeta):
     AGENT安装基类
     """
 
-    def __init__(self, name):
-        super().__init__(name=name)
-
     # def execute(self, data, parent_data):
     #     # 国际化
     #     translation.activate(data.get_one_of_inputs("blueking_language", "zh-hans"))
@@ -119,7 +116,7 @@ class AgentBaseService(BaseService, metaclass=abc.ABCMeta):
     #
     #     return result
     #
-    # def _execute(self, data, parent_data):
+    # def _execute(self, data, parent_data, common_data):
     #     raise NotImplementedError
 
 
@@ -130,16 +127,13 @@ class QueryTjjPasswordService(AgentBaseService):
 
     name = _("查询铁将军密码")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [
             Service.InputItem(name="host_info", key="host_info", type="object", required=True),
             Service.InputItem(name="creator", key="creator", type="str", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         # 查询主机是否支持铁将军
         host_info = data.get_one_of_inputs("host_info")
         creator = data.get_one_of_inputs("creator")
@@ -173,9 +167,6 @@ class RegisterHostService(AgentBaseService):
 
     __need_schedule__ = True
     interval = StaticIntervalGenerator(POLLING_INTERVAL)
-
-    def __init__(self):
-        super().__init__(name=self.name)
 
     def inputs_format(self):
         return [
@@ -252,7 +243,7 @@ class RegisterHostService(AgentBaseService):
         result = client_v2.cc.search_business(kwargs)["info"]
         return result
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         host_info = data.get_one_of_inputs("host_info")
         try:
             host = Host.get_by_host_info(host_info)
@@ -440,14 +431,6 @@ class ChooseAccessPointService(AgentBaseService):
     name = _("选择接入点")
     MIN_PING_TIME = 9999
 
-    # def __init__(self):
-    #     super().__init__(name=self.name)
-    #
-    # def inputs_format(self):
-    #     return [
-    #         Service.InputItem(name="host_info", key="host_info", type="object", required=True),
-    #     ]
-
     def _execute(self, data, parent_data, common_data):
         ap_id_obj_map = common_data.ap_id_obj_map
         # 查询当前主机是否已配置接入点
@@ -456,7 +439,7 @@ class ChooseAccessPointService(AgentBaseService):
             host = common_data.host_id_obj_map[bk_host_id]
 
             if host.ap_id != constants.DEFAULT_AP_ID:
-                # TODO 打日志可以考虑聚合一波再打
+                # TODO 打日志可以考虑聚合一波再写入
                 self.log_info(
                     sub_inst_ids=[sub_inst.id],
                     log_content=_("当前主机已分配接入点[{ap_name}]").format(ap_name=ap_id_obj_map[host.ap_id].name),
@@ -467,10 +450,14 @@ class ChooseAccessPointService(AgentBaseService):
                 proxy = host.get_random_alive_proxy()
                 host.ap_id = proxy.ap_id
                 host.save()
-                self.log_info(_("已选择[{ap_name}]作为本次安装接入点").format(ap_name=ap_id_obj_map[proxy.ap_id].name))
+                self.log_info(
+                    sub_inst_ids=[sub_inst.id],
+                    log_content=_("已选择[{ap_name}]作为本次安装接入点").format(ap_name=ap_id_obj_map[proxy.ap_id].name),
+                )
                 continue
             else:
-                min_ping_ap_id, ap_ping_time, min_ping_time = self._agent_choose_ap(host)
+                # TODO for循环内
+                min_ping_ap_id, ap_ping_time, min_ping_time = self._agent_choose_ap(host, sub_inst)
                 if not ap_ping_time:
                     self.move_insts_to_failed([sub_inst.id], _("自动选择接入点失败，请到全局配置新建接入点"))
                     continue
@@ -479,10 +466,12 @@ class ChooseAccessPointService(AgentBaseService):
                     continue
                 host.ap_id = min_ping_ap_id
                 host.save()
-                self.logger.info(_("已选择[{ap_name}]作为本次安装接入点").format(ap_name=ap_id_obj_map[host.ap_id].name))
-                return True
+                self.log_info(
+                    sub_inst_ids=[sub_inst.id],
+                    log_content=_("已选择[{ap_name}]作为本次安装接入点").format(ap_name=ap_id_obj_map[host.ap_id].name),
+                )
 
-    def _agent_choose_ap(self, host):
+    def _agent_choose_ap(self, host, sub_inst):
         is_linux = host.os_type in [constants.OsType.LINUX, constants.OsType.AIX]
         ssh_man = None
         if is_linux:
@@ -519,8 +508,11 @@ class ChooseAccessPointService(AgentBaseService):
                 ap_ping_time[ap.id] = sum(gse_ping_time) / len(gse_ping_time)
             else:
                 ap_ping_time[ap.id] = self.MIN_PING_TIME
-            self.logger.info(
-                _("连接至接入点[{ap_name}]的平均延迟为{ap_ping_time}").format(ap_name=ap.name, ap_ping_time=ap_ping_time[ap.id])
+            self.log_info(
+                sub_inst_ids=[sub_inst.id],
+                log_content=_("连接至接入点[{ap_name}]的平均延迟为{ap_ping_time}").format(
+                    ap_name=ap.name, ap_ping_time=ap_ping_time[ap.id]
+                ),
             )
 
             if ap_ping_time[ap.id] < min_ping_time:
@@ -541,16 +533,13 @@ class ConfigurePolicyService(AgentBaseService):
     __need_schedule__ = True
     interval = StaticIntervalGenerator(POLLING_INTERVAL)
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [Service.InputItem(name="host_info", key="host_info", type="object", required=True)]
 
     def outputs_format(self):
         return [Service.OutputItem(name="login_ip", key="login_ip", type="str", required=True)]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         """
         添加策略的接口不能同时调用，此原子只用查询，策略由configuration_policy周期任务进行添加
         """
@@ -588,9 +577,6 @@ class ConfigurePolicyService(AgentBaseService):
 class InstallService(AgentBaseService, JobFastExecuteScriptService):
     name = _("下发脚本命令")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     __need_schedule__ = True
     __multi_callback_enabled__ = True
     interval = None
@@ -607,11 +593,17 @@ class InstallService(AgentBaseService, JobFastExecuteScriptService):
             ),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
+        # TODO 待改造为批量执行
+        for sub_inst in common_data.subscription_instances:
+            # TODO 待改造为批量执行
+            bk_host_id = sub_inst.instance_info["host"]["bk_host_id"]
+            host = common_data.host_id_obj_map[bk_host_id]
+            self.logger.info(("{ip} 异步安装Agent，暂存callback数据，通过schedule合并查询".format(ip=host.inner_ip)))
+        return True
         bk_host_id = data.get_one_of_inputs("bk_host_id")
         host_info = data.get_one_of_inputs("host_info")
         host = Host.get_by_host_info({"bk_host_id": bk_host_id} if bk_host_id else host_info)
-        bk_username = data.get_one_of_inputs("bk_username")
 
         is_uninstall = data.get_one_of_inputs("is_uninstall")
         is_manual = host.is_manual
@@ -652,11 +644,8 @@ class InstallService(AgentBaseService, JobFastExecuteScriptService):
             self.logger.info(_("主机的上游节点为: {proxies}").format(proxies=",".join(installation_tool.upstream_nodes)))
             self.logger.info(_("已选择 {inner_ip} 作为本次安装的跳板机").format(inner_ip=installation_tool.jump_server.inner_ip))
             return self.execute_job_commands(
-                bk_username,
                 installation_tool.jump_server,
-                host,
                 installation_tool.run_cmd,
-                installation_tool.pre_commands,
             )
         else:
             # AGENT 或 PROXY安装走 ssh或wmi 连接
@@ -747,7 +736,7 @@ class InstallService(AgentBaseService, JobFastExecuteScriptService):
                 else:
                     break
 
-    def execute_job_commands(self, bk_username, proxy, host, run_cmd, pre_commands=None):
+    def execute_job_commands(self, proxy, run_cmd):
         path = os.path.join(settings.PROJECT_ROOT, "script_tools", "setup_pagent.py")
         with open(path, encoding="utf-8") as fh:
             script = fh.read()
@@ -913,9 +902,6 @@ class InstallService(AgentBaseService, JobFastExecuteScriptService):
 class PushUpgradePackageService(JobFastPushFileService):
     name = _("下发升级包")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         inputs = super().inputs_format()
         inputs.append(Service.InputItem(name="host_info", key="host_info", type="object", required=True))
@@ -953,9 +939,6 @@ class PushUpgradePackageService(JobFastPushFileService):
 
 class RunUpgradeCommandService(JobFastExecuteScriptService):
     name = _("下发升级脚本命令")
-
-    def __init__(self):
-        super().__init__(name=self.name)
 
     def inputs_format(self):
         inputs = super().inputs_format()
@@ -1034,16 +1017,13 @@ fi
 class RestartService(AgentBaseService):
     name = _("重启")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [
             Service.InputItem(name="host_info", key="host_info", type="object", required=True),
             Service.InputItem(name="bk_username", key="bk_username", type="str", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         self.logger.info(_("调用作业平台重启Agent"))
         host_info = data.get_one_of_inputs("host_info")
         bk_username = data.get_one_of_inputs("bk_username")
@@ -1114,9 +1094,6 @@ class RestartService(AgentBaseService):
 class GetAgentStatusService(AgentBaseService):
     name = _("查询 GSE 状态")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     __need_schedule__ = True
     interval = StaticIntervalGenerator(5)
 
@@ -1126,7 +1103,7 @@ class GetAgentStatusService(AgentBaseService):
             Service.InputItem(name="expect_status", key="expect_status", type="str", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         expect_status = data.get_one_of_inputs("expect_status")
         self.logger.info(_("期望的GSE主机状态为{expect_status}").format(expect_status=expect_status))
         return True
@@ -1192,16 +1169,13 @@ class GetAgentStatusService(AgentBaseService):
 class UpdateProcessStatusService(AgentBaseService):
     name = _("更新主机进程状态")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [
             Service.InputItem(name="host_info", key="host_info", type="object", required=True),
             Service.InputItem(name="status", key="status", type="str", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         status = data.get_one_of_inputs("status")
         bk_host_id = data.get_one_of_inputs("bk_host_id")
         host_info = data.get_one_of_inputs("host_info")
@@ -1220,16 +1194,13 @@ class UpdateProcessStatusService(AgentBaseService):
 class UpdateJobStatusService(AgentBaseService):
     name = _("更新任务状态")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [
             Service.InputItem(name="host_info", key="host_info", type="object", required=True),
             Service.InputItem(name="expect_status", key="expect_status", type="int", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         update_job_status(self.root_pipeline_id, result=True)
         return True
 
@@ -1243,10 +1214,7 @@ class OperatePluginService(AgentBaseService, GseBaseService):
     __need_schedule__ = True
     interval = StaticIntervalGenerator(POLLING_INTERVAL)
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         bk_username = data.get_one_of_inputs("bk_username")
         plugin_name = data.get_one_of_inputs("plugin_name")
         action = data.get_one_of_inputs("action")
@@ -1363,15 +1331,12 @@ class WaitService(AgentBaseService):
     __need_schedule__ = True
     interval = StaticIntervalGenerator(5)
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [
             Service.InputItem(name="sleep_time", key="sleep_time", type="int", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         return True
 
     def schedule(self, data, parent_data, callback_data=None):
@@ -1385,15 +1350,12 @@ class WaitService(AgentBaseService):
 class CheckAgentStatusService(AgentBaseService):
     name = _("检查Agent状态")
 
-    def __init__(self):
-        super().__init__(name=self.name)
-
     def inputs_format(self):
         return [
             Service.InputItem(name="bk_host_id", key="bk_host_id", type="int", required=True),
         ]
 
-    def _execute(self, data, parent_data):
+    def _execute(self, data, parent_data, common_data):
         bk_host_id = data.get_one_of_inputs("bk_host_id")
         process_status = ProcessStatus.objects.filter(bk_host_id=bk_host_id, name=ProcessStatus.GSE_AGENT_PROCESS_NAME)
         running_status = process_status.filter(status=constants.ProcStateType.RUNNING)
@@ -1415,9 +1377,6 @@ class CheckAgentStatusService(AgentBaseService):
 
 class RenderAndPushGseConfigService(JobPushMultipleConfigFileService):
     name = _("渲染并下发Agent配置")
-
-    def __init__(self):
-        super().__init__(name=self.name)
 
     def inputs_format(self):
         return [

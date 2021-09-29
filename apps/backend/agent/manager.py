@@ -60,6 +60,7 @@ class AgentServiceActivity(ServiceActivity):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.component.inputs.description = Var(type=Var.SPLICE, value="${description}")
+        self.component.inputs.act_name = Var(type=Var.SPLICE, value=self.name)
 
 
 class AgentManager(object):
@@ -72,12 +73,6 @@ class AgentManager(object):
         self.step = step
         self.creator = step.subscription.creator
         self.blueking_language = step.subscription_step.params.get("blueking_language")
-
-    # def __init__(self, instance_record: SubscriptionInstanceRecord, creator: str, blueking_language: str):
-    #     self.task_id = instance_record.task_id
-    #     self.host_info = instance_record.instance_info["host"]
-    #     self.creator = creator
-    #     self.blueking_language = blueking_language
 
     def register_host(self):
         """
@@ -134,10 +129,10 @@ class AgentManager(object):
         执行安装脚本
         """
         act = AgentServiceActivity(component_code=InstallComponent.code, name=name)
-        act.component.inputs.task_id = Var(type=Var.PLAIN, value=self.task_id)
+        # act.component.inputs.task_id = Var(type=Var.PLAIN, value=self.task_id)
         act.component.inputs.bk_username = Var(type=Var.PLAIN, value=self.creator)
-        act.component.inputs.bk_host_id = Var(type=Var.SPLICE, value="${bk_host_id}")
-        act.component.inputs.host_info = Var(type=Var.PLAIN, value=self.host_info)
+        # act.component.inputs.bk_host_id = Var(type=Var.SPLICE, value="${bk_host_id}")
+        # act.component.inputs.host_info = Var(type=Var.PLAIN, value=self.host_info)
         act.component.inputs.success_callback_step = Var(type=Var.PLAIN, value="check_deploy_result")
         act.component.inputs.blueking_language = Var(type=Var.PLAIN, value=self.blueking_language)
         return act

@@ -248,7 +248,7 @@ class ReinstallAgent(AgentAction):
 
         activities = [
             agent_manager.choose_ap(),
-            # agent_manager.install(install_name),
+            agent_manager.install(),
             # agent_manager.get_agent_status(expect_status=ProcStateType.RUNNING),
         ]
 

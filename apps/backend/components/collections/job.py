@@ -68,16 +68,9 @@ class JobBaseService(six.with_metaclass(abc.ABCMeta, Service)):
 
     def log_debug(self, msg, log_context=None):
         logger.debug(self._append_log_context(msg, log_context))
-        # self.logger.debug(msg)
 
     def log_by_task_result(self, job_instance_id, task_result, log_context=None):
         for res in task_result.get("success", []):
-            # self.log_info("JOB(task_id: [{}], ip: [{}]) get schedule finished with task result:\n[{}].".format(
-            #     job_instance_id,
-            #     res['ip'],
-            #     res['log_content']),
-            #     log_context
-            # )
             self.log_info(
                 "JOB(task_id: [{}], ip: [{}]) get schedule finished.".format(job_instance_id, res["ip"]),
                 log_context,
