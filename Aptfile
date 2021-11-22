@@ -1,0 +1,7 @@
+# you can list packages
+libssl-dev
+build-essential
+default-libmysqlclient-dev
+vim
+iputils-ping
+mysql-client
